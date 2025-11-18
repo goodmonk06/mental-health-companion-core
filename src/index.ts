@@ -1,6 +1,7 @@
 import express from 'express';
 import { config } from './config';
 import routes from './api/routes';
+import { errorHandler } from './api/middleware';
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use('/api', routes);
 // Root endpoint
 app.get('/', (_req, res) => {
   res.json({
+    success: true,
     name: 'Mental Health Companion Core',
     version: '0.1.0',
     status: 'running',
@@ -28,11 +30,8 @@ app.get('/', (_req, res) => {
   });
 });
 
-// Error handler
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
-});
+// Error handler (must be last)
+app.use(errorHandler);
 
 const PORT = config.server.port;
 
