@@ -1,0 +1,88 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String         @id @default(cuid())
+  externalId   String?        @unique
+  createdAt    DateTime       @default(now())
+  sessions     Session[]
+  journalEntries JournalEntry[]
+
+  @@map("users")
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+  moodTag    String?
+  summary    String?   @db.Text
+  messages   Message[]
+  safetyFlags SafetyFlag[]
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      MessageRole
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@map("messages")
+}
+
+model JournalEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  title     String
+  content   String   @db.Text
+  tags      Json     @default("[]")
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([date])
+  @@map("journal_entries")
+}
+
+model SafetyFlag {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  flagType  String
+  keyword   String?
+  severity  SafetySeverity
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@map("safety_flags")
+}
+
+enum MessageRole {
+  user
+  ai
+}
+
+enum SafetySeverity {
+  low
+  medium
+  high
+  critical
+}
