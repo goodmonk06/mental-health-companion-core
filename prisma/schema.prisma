@@ -11,11 +11,20 @@ datasource db {
 }
 
 model User {
-  id           String         @id @default(cuid())
-  externalId   String?        @unique
-  createdAt    DateTime       @default(now())
-  sessions     Session[]
+  id             String         @id @default(cuid())
+  externalId     String?        @unique
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  status         UserStatus     @default(active)
+  profile        UserProfile?
+  sessions       Session[]
   journalEntries JournalEntry[]
+  moodEntries    MoodEntry[]
+  goals          UserGoal[]
+  insights       Insight[]
+  notifications  Notification[]
+  activities     ActivityLog[]
+  exerciseCompletions ExerciseCompletion[]
 
   @@map("users")
 }
@@ -85,4 +94,220 @@ enum SafetySeverity {
   medium
   high
   critical
+}
+
+enum UserStatus {
+  active
+  inactive
+  suspended
+}
+
+enum GoalStatus {
+  active
+  completed
+  abandoned
+  paused
+}
+
+enum ExerciseType {
+  breathing
+  journaling
+  meditation
+  gratitude
+  cognitive_reframing
+  grounding
+  progressive_relaxation
+}
+
+enum ExerciseDifficulty {
+  beginner
+  intermediate
+  advanced
+}
+
+enum NotificationStatus {
+  pending
+  sent
+  failed
+  cancelled
+}
+
+enum ActivityType {
+  session_started
+  session_ended
+  message_sent
+  journal_created
+  goal_created
+  goal_updated
+  exercise_completed
+  mood_logged
+  safety_flag_raised
+}
+
+model UserProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName         String?
+  timezone            String   @default("UTC")
+  preferredLanguage   String   @default("ja")
+  therapyGoals        Json     @default("[]") // Array of goal descriptions
+  focusAreas          Json     @default("[]") // Areas like "anxiety", "depression", "stress"
+  aiPersonality       String   @default("empathetic") // empathetic, professional, casual
+  notificationEnabled Boolean  @default(true)
+  reminderTime        String?  // HH:MM format for daily reminders
+  metadata            Json     @default("{}")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("user_profiles")
+}
+
+model MoodEntry {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moodScore   Int      // 1-10 scale
+  emotions    Json     @default("[]") // Array of emotion tags
+  notes       String?  @db.Text
+  triggers    Json     @default("[]") // What triggered this mood
+  activities  Json     @default("[]") // What the user was doing
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("mood_entries")
+}
+
+model Exercise {
+  id                String               @id @default(cuid())
+  title             String
+  description       String               @db.Text
+  type              ExerciseType
+  difficulty        ExerciseDifficulty
+  durationMinutes   Int
+  instructions      Json                 // Step-by-step instructions
+  benefits          Json                 @default("[]") // List of benefits
+  tags              Json                 @default("[]")
+  isActive          Boolean              @default(true)
+  completions       ExerciseCompletion[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([type])
+  @@index([difficulty])
+  @@map("exercises")
+}
+
+model ExerciseCompletion {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  exercise     Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  completed    Boolean  @default(true)
+  rating       Int?     // 1-5 stars
+  feedback     String?  @db.Text
+  durationMinutes Int?
+  notes        String?  @db.Text
+  completedAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([exerciseId])
+  @@index([completedAt])
+  @@map("exercise_completions")
+}
+
+model UserGoal {
+  id            String     @id @default(cuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  description   String     @db.Text
+  category      String     // e.g., "anxiety_management", "sleep_improvement"
+  targetDate    DateTime?
+  status        GoalStatus @default(active)
+  progress      Int        @default(0) // 0-100 percentage
+  milestones    Json       @default("[]") // Array of milestone objects
+  notes         String?    @db.Text
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  completedAt   DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@map("user_goals")
+}
+
+model Insight {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // "pattern", "improvement", "warning", "milestone"
+  title       String
+  content     String   @db.Text
+  metadata    Json     @default("{}")  // Additional structured data
+  isRead      Boolean  @default(false)
+  priority    Int      @default(0)     // Higher = more important
+  validUntil  DateTime?                // Expiry for time-sensitive insights
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("insights")
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String   @db.Text
+  category    String   // "check_in", "crisis_support", "goal_review", etc.
+  systemPrompt String  @db.Text
+  initialMessage String @db.Text
+  suggestedQuestions Json @default("[]") // Array of follow-up questions
+  metadata    Json     @default("{}")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@map("templates")
+}
+
+model Notification {
+  id          String             @id @default(cuid())
+  userId      String
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String             // "reminder", "insight", "milestone", "system"
+  title       String
+  message     String             @db.Text
+  status      NotificationStatus @default(pending)
+  scheduledFor DateTime
+  sentAt      DateTime?
+  metadata    Json               @default("{}")
+  createdAt   DateTime           @default(now())
+
+  @@index([userId])
+  @@index([status])
+  @@index([scheduledFor])
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        ActivityType
+  entityType  String?      // "session", "goal", "exercise", etc.
+  entityId    String?
+  metadata    Json         @default("{}")
+  ipAddress   String?
+  userAgent   String?      @db.Text
+  createdAt   DateTime     @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("activity_logs")
 }
